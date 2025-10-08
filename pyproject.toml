@@ -35,6 +35,11 @@ transformers = "^4.45.0"
 tokenizers = "0.20.3"
 sentence-transformers = "2.7.0"
 
+# --- evaluation & telemetry ---
+structlog = "^24.1.0"
+orjson = "^3.10.7"
+pyarrow = "^17.0.0"  # for parquet support
+
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.2"
 pytest-cov = "^5.0.0"
@@ -48,6 +53,11 @@ pre-commit = "^3.8.0"
 # ---------- scripts ----------
 [tool.poetry.scripts]
 dev-api = "rag_papers.api.main:run"
+rag-eval = "scripts.rag_eval:main"
+rag-batch = "scripts.rag_batch:main"
+rag-serve = "scripts.rag_serve:main"
+rag-ingest = "scripts.rag_ingest:main"
+rag-cache = "scripts.rag_cache:main"
 
 # ---------- tooling config ----------
 [tool.pytest.ini_options]

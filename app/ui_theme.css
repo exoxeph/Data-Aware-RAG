@@ -1,0 +1,288 @@
+/* RAG Cockpit - Techno/Neon Theme */
+
+/* Global dark background */
+.stApp {
+    background: linear-gradient(135deg, #0a0e27 0%, #1a1a2e 100%);
+    color: #e0e0e0;
+}
+
+/* Main content area */
+.main .block-container {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+    max-width: 100%;
+}
+
+/* Headers with neon glow */
+h1, h2, h3 {
+    font-family: ui-monospace, 'SF Mono', 'Menlo', 'Consolas', monospace !important;
+    color: #00F5FF;
+    text-shadow: 0 0 10px rgba(0, 245, 255, 0.5);
+    font-weight: 600;
+    letter-spacing: 0.05em;
+}
+
+h1 {
+    font-size: 2.5rem;
+    margin-bottom: 1.5rem;
+}
+
+h2 {
+    font-size: 1.8rem;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+}
+
+h3 {
+    font-size: 1.3rem;
+    color: #FF00D4;
+    text-shadow: 0 0 8px rgba(255, 0, 212, 0.4);
+}
+
+/* Metric chips with glow */
+.metric-chip {
+    display: inline-block;
+    padding: 0.4rem 1rem;
+    margin: 0.3rem;
+    background: rgba(0, 245, 255, 0.1);
+    border: 1px solid #00F5FF;
+    border-radius: 20px;
+    color: #00F5FF;
+    font-family: monospace;
+    font-size: 0.9rem;
+    font-weight: 500;
+    text-shadow: 0 0 5px rgba(0, 245, 255, 0.3);
+    transition: all 0.3s ease;
+}
+
+.metric-chip:hover {
+    background: rgba(0, 245, 255, 0.2);
+    box-shadow: 0 0 15px rgba(0, 245, 255, 0.4);
+    transform: translateY(-2px);
+}
+
+.metric-chip.success {
+    border-color: #00FF88;
+    color: #00FF88;
+    background: rgba(0, 255, 136, 0.1);
+}
+
+.metric-chip.warning {
+    border-color: #FFD700;
+    color: #FFD700;
+    background: rgba(255, 215, 0, 0.1);
+}
+
+.metric-chip.error {
+    border-color: #FF00D4;
+    color: #FF00D4;
+    background: rgba(255, 0, 212, 0.1);
+}
+
+/* Card-like containers */
+.glass-card {
+    background: rgba(26, 26, 46, 0.6);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(0, 245, 255, 0.2);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* Code blocks */
+.stCode {
+    background: rgba(10, 14, 39, 0.8) !important;
+    border: 1px solid #00F5FF !important;
+    border-radius: 8px !important;
+    box-shadow: 0 0 10px rgba(0, 245, 255, 0.1) !important;
+}
+
+/* Buttons */
+.stButton > button {
+    background: linear-gradient(135deg, #00F5FF 0%, #00C8D4 100%);
+    color: #0a0e27;
+    border: none;
+    border-radius: 8px;
+    padding: 0.6rem 1.5rem;
+    font-family: monospace;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    box-shadow: 0 4px 10px rgba(0, 245, 255, 0.3);
+    transition: all 0.3s ease;
+}
+
+.stButton > button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(0, 245, 255, 0.5);
+}
+
+.stButton > button:active {
+    transform: translateY(0);
+}
+
+/* Secondary buttons */
+.stButton > button[kind="secondary"] {
+    background: transparent;
+    border: 1px solid #FF00D4;
+    color: #FF00D4;
+}
+
+/* Inputs and text areas */
+.stTextInput > div > div > input,
+.stTextArea > div > div > textarea,
+.stSelectbox > div > div > select {
+    background: rgba(10, 14, 39, 0.6) !important;
+    border: 1px solid rgba(0, 245, 255, 0.3) !important;
+    border-radius: 6px !important;
+    color: #e0e0e0 !important;
+    font-family: monospace !important;
+}
+
+.stTextInput > div > div > input:focus,
+.stTextArea > div > div > textarea:focus {
+    border-color: #00F5FF !important;
+    box-shadow: 0 0 8px rgba(0, 245, 255, 0.3) !important;
+}
+
+/* Sliders */
+.stSlider > div > div > div {
+    background: rgba(0, 245, 255, 0.2) !important;
+}
+
+.stSlider > div > div > div > div {
+    background: #00F5FF !important;
+}
+
+/* Expanders */
+.streamlit-expanderHeader {
+    background: rgba(26, 26, 46, 0.6) !important;
+    border: 1px solid rgba(0, 245, 255, 0.2) !important;
+    border-radius: 8px !important;
+    color: #00F5FF !important;
+    font-family: monospace !important;
+}
+
+.streamlit-expanderHeader:hover {
+    border-color: #00F5FF !important;
+    background: rgba(0, 245, 255, 0.1) !important;
+}
+
+/* Tables */
+.stDataFrame {
+    border: 1px solid rgba(0, 245, 255, 0.2) !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
+}
+
+.stDataFrame thead tr th {
+    background: rgba(0, 245, 255, 0.15) !important;
+    color: #00F5FF !important;
+    font-family: monospace !important;
+    border-bottom: 2px solid #00F5FF !important;
+}
+
+.stDataFrame tbody tr:hover {
+    background: rgba(0, 245, 255, 0.05) !important;
+}
+
+/* Tabs */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 8px;
+    background: rgba(26, 26, 46, 0.4);
+    border-radius: 8px;
+    padding: 0.5rem;
+}
+
+.stTabs [data-baseweb="tab"] {
+    border-radius: 6px;
+    color: #808080;
+    font-family: monospace;
+}
+
+.stTabs [aria-selected="true"] {
+    background: rgba(0, 245, 255, 0.2);
+    color: #00F5FF;
+    border-bottom: 2px solid #00F5FF;
+}
+
+/* Sidebar */
+.css-1d391kg, [data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #0a0e27 0%, #16213e 100%);
+    border-right: 1px solid rgba(0, 245, 255, 0.2);
+}
+
+/* Metrics (native st.metric) */
+[data-testid="stMetricValue"] {
+    color: #00F5FF;
+    font-size: 2rem;
+    text-shadow: 0 0 10px rgba(0, 245, 255, 0.4);
+    font-family: monospace;
+}
+
+[data-testid="stMetricLabel"] {
+    color: #a0a0a0;
+    font-family: monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.75rem;
+}
+
+/* Progress bars */
+.stProgress > div > div > div {
+    background: linear-gradient(90deg, #00F5FF 0%, #FF00D4 100%);
+}
+
+/* Warnings and info */
+.stAlert {
+    background: rgba(26, 26, 46, 0.8);
+    border-left: 4px solid #FFD700;
+    border-radius: 6px;
+}
+
+.stSuccess {
+    border-left-color: #00FF88;
+}
+
+.stError {
+    border-left-color: #FF00D4;
+}
+
+/* File uploader */
+.stFileUploader > div {
+    background: rgba(26, 26, 46, 0.6);
+    border: 2px dashed rgba(0, 245, 255, 0.3);
+    border-radius: 8px;
+}
+
+.stFileUploader > div:hover {
+    border-color: #00F5FF;
+    background: rgba(0, 245, 255, 0.05);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(10, 14, 39, 0.4);
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(0, 245, 255, 0.4);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 245, 255, 0.6);
+}
+
+/* Highlight marks */
+mark {
+    background: rgba(255, 215, 0, 0.3);
+    color: #FFD700;
+    padding: 2px 4px;
+    border-radius: 3px;
+}
