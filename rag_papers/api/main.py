@@ -40,11 +40,17 @@ from ..persist import (
 )
 from ..ops import JobManager, run_ingest
 
+# Stage 8: Import chat API
+from .chat import router as chat_router
+
 app = FastAPI(
     title="RAG Papers API",
-    description="Data-Aware RAG for PDF Research Papers with Stage 4 DAG Orchestration",
-    version="1.0.0",
+    description="Data-Aware RAG for PDF Research Papers with Multi-Turn Chat",
+    version="1.1.0",
 )
+
+# Include chat router
+app.include_router(chat_router, prefix="/api", tags=["chat"])
 
 # Global state for dependencies (initialized on startup)
 _docs: Optional[list[str]] = None

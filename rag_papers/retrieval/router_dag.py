@@ -7,7 +7,7 @@ query intent.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Literal, Optional, Tuple, Any, TypedDict
+from typing import List, Dict, Literal, Optional, Tuple, Any, TypedDict, AsyncIterator
 import time
 
 from rag_papers.retrieval.ensemble_retriever import EnsembleRetriever
@@ -60,6 +60,7 @@ class Context(TypedDict, total=False):
 @dataclass
 class Stage4Config:
     """Configuration for Stage 4 orchestration."""
+    # Retrieval and ranking
     top_k_first: int = 12
     rerank_top_k: int = 8
     prune_min_overlap: int = 1
@@ -67,12 +68,26 @@ class Stage4Config:
     context_max_chars: int = 4000
     accept_threshold: float = 0.72
     max_repairs: int = 1
+    
+    # Ensemble weights
     bm25_weight_init: float = 0.5
     vector_weight_init: float = 0.5
     bm25_weight_on_repair: float = 0.7
     vector_weight_on_repair: float = 0.3
+    
+    # Generation
     temperature_init: float = 0.2
     temperature_on_repair: float = 0.1
+    
+    # Stage 9: Streaming flags
+    enable_streaming: bool = True
+    max_history_turns: int = 5
+    
+    # Convenience property for top_k (used in many places)
+    @property
+    def top_k(self) -> int:
+        """Alias for rerank_top_k for backward compatibility."""
+        return self.rerank_top_k
 
 
 # ============================================================================
@@ -500,3 +515,225 @@ def run_plan(
                 break  # Answer accepted, skip repair
     
     return ctx.get("answer", ""), ctx
+
+
+def run_chat_plan(
+    query: str,
+    history: List[Dict[str, str]],
+    retriever: EnsembleRetriever,
+    generator: BaseGenerator,
+    cfg: Stage4Config,
+    use_cache: bool = True
+) -> Tuple[str, Context]:
+    """
+    Run RAG plan with conversation history context.
+    
+    Merges recent chat history into query context for history-aware retrieval
+    and generation.
+    
+    Args:
+        query: Current user query
+        history: List of previous messages [{"role": "user/assistant", "content": "..."}]
+        retriever: Document retriever
+        generator: LLM generator
+        cfg: Pipeline configuration
+        use_cache: Whether to use caching
+    
+    Returns:
+        Tuple of (answer, context) where context includes sources and metadata
+    
+    Example:
+        >>> history = [
+        ...     {"role": "user", "content": "What is transfer learning?"},
+        ...     {"role": "assistant", "content": "Transfer learning is..."}
+        ... ]
+        >>> answer, ctx = run_chat_plan(
+        ...     "How does it work?",
+        ...     history,
+        ...     retriever,
+        ...     generator,
+        ...     cfg
+        ... )
+    """
+    # Build history prefix from recent messages (last 5 turns)
+    recent_history = history[-5:] if len(history) > 5 else history
+    
+    if recent_history:
+        history_lines = [
+            f"{msg['role'].capitalize()}: {msg['content']}"
+            for msg in recent_history
+        ]
+        history_prefix = "\n".join(history_lines) + "\n"
+        
+        # Augment query with history context
+        contextualized_query = f"{history_prefix}User: {query}\nAssistant:"
+    else:
+        contextualized_query = query
+    
+    # Run standard plan with history-enriched query
+    answer, ctx = run_plan(
+        query=contextualized_query,
+        retriever=retriever,
+        generator=generator,
+        cfg=cfg,
+        use_cache=use_cache
+    )
+    
+    # Store original query in metadata for tracking
+    ctx["meta"]["original_query"] = query
+    ctx["meta"]["history_turns"] = len(history)
+    
+    return answer, ctx
+
+
+async def run_chat_plan_stream(
+    query: str,
+    history: List[Dict[str, str]],
+    retriever: EnsembleRetriever,
+    generator: BaseGenerator,
+    cfg: Stage4Config,
+    use_cache: bool = True
+) -> AsyncIterator[Dict[str, Any]]:
+    """
+    Stream chat plan execution as SSE events.
+    
+    Yields events:
+    - type: meta -> {"run_id", "corpus_id", "retrieved", "ctx_chars"}
+    - type: token -> {"t": " word "}
+    - type: sources -> {"sources": [{"doc", "score"}]}
+    - type: verify -> {"score", "accepted", "issues"}
+    - type: cached -> {"answer"} (if cache hit)
+    - type: done -> implicit (caller handles)
+    
+    Args:
+        query: User's current question
+        history: Previous conversation turns [{"role", "content"}]
+        retriever: Ensemble retriever
+        generator: LLM generator with stream() method
+        cfg: Stage4 configuration
+        use_cache: Whether to check answer cache
+    
+    Yields:
+        Dict events for SSE encoding
+    """
+    import time
+    import uuid
+    from rag_papers.persist.answer_cache import get_answer, set_answer, AnswerKey, AnswerValue
+    from rag_papers.generation.verifier import ResponseVerifier
+    
+    run_id = str(uuid.uuid4())[:8]
+    start_time = time.time()
+    
+    # Build history context (last 5 turns)
+    history_prefix = ""
+    if history:
+        recent_turns = history[-5:]  # Last 5 turns
+        for turn in recent_turns:
+            role = turn.get("role", "user")
+            content = turn.get("content", "")
+            history_prefix += f"{role.capitalize()}: {content}\n"
+        history_prefix += "\n"
+    
+    # Contextualize query
+    contextualized_query = history_prefix + f"User: {query}"
+    
+    # Check answer cache first
+    if use_cache:
+        cache_key = AnswerKey(
+            query=contextualized_query,
+            corpus_id=retriever.corpus_id,
+            model_id=generator.__class__.__name__
+        )
+        cached_answer = get_answer(cache_key)
+        
+        if cached_answer:
+            # Cache hit - return immediately
+            yield {
+                "type": "cached",
+                "data": {"answer": cached_answer.answer}
+            }
+            return
+    
+    # Cache miss - run full pipeline
+    
+    # 1. Retrieve documents
+    results = retriever.search(contextualized_query, top_k=cfg.top_k)
+    retrieved_count = len(results)
+    
+    # Yield meta event
+    yield {
+        "type": "meta",
+        "data": {
+            "run_id": run_id,
+            "corpus_id": retriever.corpus_id,
+            "retrieved": retrieved_count,
+            "ctx_chars": sum(len(r.content) for r in results)
+        }
+    }
+    
+    # Yield sources event
+    yield {
+        "type": "sources",
+        "data": {
+            "sources": [
+                {
+                    "doc": r.document_id,
+                    "score": r.score,
+                    "snippet": r.content[:200] + "..." if len(r.content) > 200 else r.content
+                }
+                for r in results[:5]  # Top 5 sources
+            ]
+        }
+    }
+    
+    # 2. Build prompt
+    context_str = "\n\n".join([
+        f"[Document {i+1}] {r.content}"
+        for i, r in enumerate(results[:cfg.top_k])
+    ])
+    
+    prompt = f"""Context:
+{context_str}
+
+Question: {query}
+
+Answer the question based on the context above. Be concise and accurate."""
+    
+    # 3. Stream generation
+    full_answer = ""
+    for token in generator.stream(prompt):
+        full_answer += token
+        yield {
+            "type": "token",
+            "data": {"t": token}
+        }
+    
+    # 4. Verify answer (optional)
+    try:
+        verifier = ResponseVerifier()
+        verification = verifier.verify(full_answer, results)
+        
+        yield {
+            "type": "verify",
+            "data": {
+                "score": verification.score,
+                "accepted": verification.accepted,
+                "issues": verification.issues
+            }
+        }
+    except Exception:
+        # Verifier optional - skip if fails
+        pass
+    
+    # 5. Cache answer for future use
+    if use_cache:
+        answer_value = AnswerValue(
+            answer=full_answer,
+            sources=[r.document_id for r in results[:5]],
+            metadata={
+                "run_id": run_id,
+                "duration_ms": int((time.time() - start_time) * 1000)
+            }
+        )
+        set_answer(cache_key, answer_value)
+

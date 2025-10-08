@@ -39,6 +39,7 @@ sentence-transformers = "2.7.0"
 structlog = "^24.1.0"
 orjson = "^3.10.7"
 pyarrow = "^17.0.0"  # for parquet support
+sse-starlette = "^3.0.2"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.2"
@@ -51,6 +52,7 @@ mypy = "^1.11.2"
 pre-commit = "^3.8.0"
 
 # ---------- scripts ----------
+pytest-asyncio = "^1.2.0"
 [tool.poetry.scripts]
 dev-api = "rag_papers.api.main:run"
 rag-eval = "scripts.rag_eval:main"

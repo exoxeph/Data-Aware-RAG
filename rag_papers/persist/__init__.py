@@ -10,7 +10,7 @@ Provides:
 """
 
 from .hashing import stable_hash
-from .paths import CorpusPaths, corpus_id_from_dir, ensure_dirs
+from .paths import CorpusPaths, corpus_id_from_dir, ensure_dirs, get_corpus_paths
 from .sqlite_store import KVStore
 from .index_store import IndexMeta, SavedIndexes, save_indexes, load_indexes
 from .embedding_cache import CachingEncoder
@@ -22,6 +22,7 @@ __all__ = [
     "CorpusPaths",
     "corpus_id_from_dir",
     "ensure_dirs",
+    "get_corpus_paths",
     "KVStore",
     "IndexMeta",
     "SavedIndexes",

@@ -1,5 +1,6 @@
 """
 Ask Page - Run queries through the DAG and inspect results.
+Stage 7: Added caching toggle, cache hit badges, and session export.
 """
 
 import streamlit as st
@@ -12,7 +13,7 @@ import time
 # Add parent to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from app.state import get_state, add_to_history
+from app.state import get_state, add_to_history, export_session
 from app.components import (
     backend_status, knobs, retrieval_table, timings_bar,
     highlight_overlap, metric_card, step_path_display
@@ -94,6 +95,53 @@ def main():
                 key="ollama_model_select"
             )
     
+    # Stage 7: Cache Toggle
+    st.markdown("---")
+    cache_col1, cache_col2, cache_col3 = st.columns([1, 1, 2])
+    
+    with cache_col1:
+        state.use_cache = st.checkbox(
+            "💾 Use Cache",
+            value=state.use_cache,
+            help="Enable answer caching for faster repeat queries"
+        )
+    
+    with cache_col2:
+        if state.use_cache:
+            st.markdown(
+                '<div style="background: linear-gradient(90deg, #00F5FF, #FF00D4); '
+                'padding: 4px 12px; border-radius: 8px; text-align: center; '
+                'font-weight: bold; color: black; margin-top: 8px;">'
+                'CACHE ON</div>',
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown(
+                '<div style="background: #333; padding: 4px 12px; '
+                'border-radius: 8px; text-align: center; color: #888; margin-top: 8px;">'
+                'CACHE OFF</div>',
+                unsafe_allow_html=True
+            )
+    
+    with cache_col3:
+        # Show last cache info if available
+        if state.last_cache_info:
+            cache_badges = []
+            if state.last_cache_info.get("answer_hit"):
+                cache_badges.append("🎯 Answer Hit")
+            if state.last_cache_info.get("retrieval_hit"):
+                cache_badges.append("🔍 Retrieval Hit")
+            embed_hits = state.last_cache_info.get("embed_hits", 0)
+            if embed_hits > 0:
+                cache_badges.append(f"🧩 {embed_hits} Embed Hits")
+            
+            if cache_badges:
+                st.markdown(
+                    f'<div style="margin-top: 8px; color: #00F5FF;">'
+                    f'{" • ".join(cache_badges)}</div>',
+                    unsafe_allow_html=True
+                )
+    
     st.markdown("---")
     
     # Query panel
@@ -145,6 +193,13 @@ def main():
                 # Extract metadata
                 metadata = extract_context_metadata(ctx)
                 metadata["accepted"] = metadata["verify_score"] >= state.cfg.accept_threshold
+                
+                # Stage 7: Extract cache info if present
+                cache_info = ctx.get("cache", {})
+                if cache_info:
+                    state.last_cache_info = cache_info
+                else:
+                    state.last_cache_info = {}
                 
                 # Save to state
                 state.last_run = {
@@ -287,17 +342,25 @@ def main():
             col_h1, col_h2 = st.columns([1, 3])
             
             with col_h1:
-                if st.button("💾 Export to JSONL"):
-                    # Export session history
+                if st.button("💾 Save Conversation", use_container_width=True):
+                    # Stage 7: Use helper function
                     export_dir = Path("runs") / f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                    export_dir.mkdir(parents=True, exist_ok=True)
-                    
                     export_file = export_dir / "session.jsonl"
-                    with open(export_file, "w") as f:
-                        for item in state.run_history:
-                            f.write(json.dumps(item) + "\n")
                     
-                    st.success(f"✓ Exported to {export_file}")
+                    try:
+                        export_session(state.run_history, export_file)
+                        state.session_file = export_file
+                        
+                        # Neon success message
+                        st.markdown(
+                            '<div style="background: linear-gradient(90deg, #00FF88, #00F5FF); '
+                            'padding: 8px; border-radius: 8px; text-align: center; '
+                            'font-weight: bold; color: black; margin-top: 8px;">'
+                            f'✓ Saved to {export_file.name}</div>',
+                            unsafe_allow_html=True
+                        )
+                    except Exception as e:
+                        st.error(f"Export failed: {e}")
             
             with col_h2:
                 st.caption(f"{len(state.run_history)} queries in this session")

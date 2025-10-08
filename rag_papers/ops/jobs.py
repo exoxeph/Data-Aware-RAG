@@ -127,6 +127,10 @@ class JobManager:
         
         return job_id
     
+    def submit(self, worker_fn: Callable, job_type: str = "generic", payload: dict = None) -> str:
+        """Alias for submit_job with backwards-compatible signature."""
+        return self.submit_job(job_type=job_type, worker_fn=worker_fn, payload=payload)
+    
     async def _run_job(self, job_id: str, worker_fn: Callable) -> None:
         """Execute job with state tracking."""
         job = self.jobs[job_id]

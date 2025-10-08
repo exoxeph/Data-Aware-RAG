@@ -5,8 +5,14 @@ Implements BaseGenerator interface for Ollama REST API.
 """
 
 import requests
-from typing import Optional
-from rag_papers.generation.generator import BaseGenerator
+import time
+import json
+from typing import Optional, Iterator
+from rag_papers.generation.generator import (
+    BaseGenerator, 
+    GeneratedResponse, 
+    GenerationConfig
+)
 
 
 class OllamaGenerator(BaseGenerator):
@@ -56,31 +62,39 @@ class OllamaGenerator(BaseGenerator):
         except requests.exceptions.RequestException:
             return False
     
+    def is_available(self) -> bool:
+        """Check if the generator is available and ready to use."""
+        return self._check_availability()
+    
     def generate(
         self, 
         prompt: str, 
-        temperature: float = 0.2, 
-        max_tokens: int = 512
-    ) -> str:
+        config: Optional[GenerationConfig] = None
+    ) -> GeneratedResponse:
         """
-        Generate text using Ollama.
+        Generate text using Ollama (non-streaming).
         
         Args:
             prompt: Input prompt
-            temperature: Sampling temperature (0.0-1.0)
-            max_tokens: Maximum tokens to generate
+            config: Generation configuration
             
         Returns:
-            Generated text
+            GeneratedResponse with metadata
             
         Raises:
             RuntimeError: If generation fails
         """
+        start_time = time.time()
+        
+        # Use config if provided, else defaults
+        temperature = config.temperature if config else 0.7
+        max_tokens = config.max_new_tokens if config else 512
+        
         try:
             payload = {
                 "model": self.model,
                 "prompt": prompt,
-                "stream": False,  # Non-streaming for simplicity
+                "stream": False,
                 "options": {
                     "temperature": temperature,
                     "num_predict": max_tokens,
@@ -99,7 +113,17 @@ class OllamaGenerator(BaseGenerator):
                 )
             
             result = response.json()
-            return result.get("response", "").strip()
+            response_text = result.get("response", "").strip()
+            processing_time = time.time() - start_time
+            
+            return GeneratedResponse(
+                text=response_text,
+                confidence=0.9,  # Ollama doesn't provide confidence scores
+                model_used=self.model,
+                prompt_length=len(prompt),
+                response_length=len(response_text),
+                processing_time=processing_time
+            )
             
         except requests.exceptions.Timeout:
             raise RuntimeError(
@@ -113,6 +137,81 @@ class OllamaGenerator(BaseGenerator):
             )
         except Exception as e:
             raise RuntimeError(f"Unexpected error during Ollama generation: {str(e)}")
+    
+    def stream(
+        self, 
+        prompt: str, 
+        config: Optional[GenerationConfig] = None
+    ) -> Iterator[str]:
+        """
+        Stream tokens from Ollama as they are generated.
+        
+        Args:
+            prompt: Input prompt
+            config: Generation configuration
+            
+        Yields:
+            Token strings as they arrive
+            
+        Raises:
+            RuntimeError: If streaming fails
+        """
+        # Use config if provided, else defaults
+        temperature = config.temperature if config else 0.7
+        max_tokens = config.max_new_tokens if config else 512
+        
+        try:
+            payload = {
+                "model": self.model,
+                "prompt": prompt,
+                "stream": True,  # Enable streaming
+                "options": {
+                    "temperature": temperature,
+                    "num_predict": max_tokens,
+                }
+            }
+            
+            response = requests.post(
+                f"{self.base_url}/api/generate",
+                json=payload,
+                timeout=self.timeout,
+                stream=True  # Enable response streaming
+            )
+            
+            if response.status_code != 200:
+                raise RuntimeError(
+                    f"Ollama API returned status {response.status_code}"
+                )
+            
+            # Parse NDJSON stream
+            for line in response.iter_lines():
+                if line:
+                    try:
+                        chunk = json.loads(line)
+                        token = chunk.get("response", "")
+                        if token:
+                            yield token
+                        
+                        # Check if done
+                        if chunk.get("done", False):
+                            break
+                            
+                    except json.JSONDecodeError:
+                        # Skip malformed lines
+                        continue
+            
+        except requests.exceptions.Timeout:
+            raise RuntimeError(
+                f"Ollama streaming timed out after {self.timeout}s"
+            )
+        except requests.exceptions.RequestException as e:
+            raise RuntimeError(
+                f"Ollama streaming failed: {str(e)}"
+            )
+        except Exception as e:
+            raise RuntimeError(f"Unexpected error during Ollama streaming: {str(e)}")
+        except Exception as e:
+            raise RuntimeError(f"Unexpected error during Ollama streaming: {str(e)}")
     
     def get_available_models(self) -> list[str]:
         """
@@ -135,3 +234,4 @@ class OllamaGenerator(BaseGenerator):
     
     def __repr__(self) -> str:
         return f"OllamaGenerator(model='{self.model}', base_url='{self.base_url}')"
+

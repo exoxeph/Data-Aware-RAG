@@ -1,5 +1,6 @@
 """
 Corpus Management Page - Upload PDFs, ingest, and build indexes.
+Stage 7: Added async ingestion with progress tracking and cache stats.
 """
 
 import streamlit as st
@@ -7,17 +8,20 @@ import sys
 from pathlib import Path
 from datetime import datetime
 import glob
+import time
+import httpx
 
 # Add parent to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from app.state import get_state, reset_indexes, ensure_directories
+from app.state import get_state, reset_indexes, ensure_directories, init_cache, get_cache_stats, load_latest_index
 from app.components import metric_card
 
 # Import RAG components
 from rag_papers.index.build_bm25 import build_bm25
 from rag_papers.index.build_vector_store import build_vector_store
 from rag_papers.retrieval.ensemble_retriever import EnsembleRetriever
+from rag_papers.persist import load_indexes, corpus_id_from_dir
 
 
 def load_corpus_from_dir(corpus_dir: str) -> list[str]:
@@ -41,6 +45,52 @@ def load_corpus_from_dir(corpus_dir: str) -> list[str]:
                 st.warning(f"Could not read {Path(path).name}: {e}")
     
     return docs
+
+
+# ===== Stage 7: Async Ingestion Helpers =====
+
+
+def start_async_ingestion(corpus_dir: str, api_url: str = "http://localhost:8000") -> str:
+    """
+    Start async ingestion job via API.
+    
+    Returns:
+        Job ID or None if failed
+    """
+    try:
+        response = httpx.post(
+            f"{api_url}/ingest/start",
+            json={
+                "corpus_dir": corpus_dir,
+                "model_name": "all-MiniLM-L6-v2",
+                "use_cache": True,
+            },
+            timeout=10.0,
+        )
+        response.raise_for_status()
+        return response.json()["job_id"]
+    except Exception as e:
+        st.error(f"Failed to start ingestion: {e}")
+        return None
+
+
+def check_job_status(job_id: str, api_url: str = "http://localhost:8000") -> dict:
+    """
+    Check ingestion job status via API.
+    
+    Returns:
+        Status dict with state, progress, message
+    """
+    try:
+        response = httpx.get(
+            f"{api_url}/ingest/status/{job_id}",
+            timeout=5.0,
+        )
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        st.error(f"Failed to check status: {e}")
+        return {"state": "failed", "progress": 0.0, "message": str(e)}
 
 
 def main():
@@ -192,6 +242,112 @@ def main():
                     import traceback
                     st.code(traceback.format_exc())
         
+        # Stage 7: Async Ingestion Section
+        st.markdown("---")
+        st.markdown("**🚀 Async Ingestion (Stage 7)**")
+        
+        async_col1, async_col2 = st.columns(2)
+        
+        with async_col1:
+            if st.button("⚡ Start Async Ingestion", use_container_width=True):
+                job_id = start_async_ingestion(corpus_dir)
+                if job_id:
+                    state.current_job_id = job_id
+                    st.success(f"✓ Job started: {job_id[:8]}...")
+                    st.rerun()
+        
+        with async_col2:
+            if st.button("🔄 Check Status", use_container_width=True):
+                if state.current_job_id:
+                    st.rerun()
+                else:
+                    st.info("No active job")
+        
+        # Job status display
+        if state.current_job_id:
+            status = check_job_status(state.current_job_id)
+            
+            # Progress bar with cyber theme
+            progress = status.get("progress", 0.0)
+            st.progress(progress, text=f"{progress*100:.1f}%")
+            
+            # Status message with neon style
+            state_emoji = {
+                "queued": "⏳",
+                "running": "⚙️",
+                "succeeded": "✅",
+                "failed": "❌",
+            }
+            emoji = state_emoji.get(status.get("state", "unknown"), "❓")
+            st.markdown(f"**{emoji} {status.get('state', 'unknown').upper()}** • {status.get('message', 'No message')}")
+            
+            # Auto-refresh while running
+            if status.get("state") in ["queued", "running"]:
+                time.sleep(1)
+                st.rerun()
+            
+            # Load indexes on success
+            if status.get("state") == "succeeded":
+                payload = status.get("payload", {})
+                if "meta" in payload:
+                    meta = payload["meta"]
+                    st.success(f"🎉 Ingestion complete! {meta.get('doc_count', 0)} docs indexed.")
+                    
+                    # Show cache stats
+                    if "embed_cache" in payload:
+                        cache = payload["embed_cache"]
+                        st.info(f"Cache: {cache.get('hits', 0)} hits, {cache.get('misses', 0)} misses ({cache.get('hit_rate', 0)*100:.1f}%)")
+                
+                if st.button("📥 Load Built Indexes"):
+                    index_dir = Path(payload.get("index_dir", ""))
+                    if index_dir.exists():
+                        with st.spinner("Loading indexes..."):
+                            try:
+                                bm25, vectors, texts, meta = load_indexes(index_dir)
+                                if bm25 and vectors is not None and texts:
+                                    state.docs = texts
+                                    state.bm25_index = bm25
+                                    state.vector_store = vectors
+                                    state.corpus_id = meta.corpus_id
+                                    st.success(f"✓ Loaded {len(texts)} docs from {index_dir.name}")
+                                    state.current_job_id = None
+                                    st.rerun()
+                            except Exception as e:
+                                st.error(f"Failed to load indexes: {e}")
+        
+        # Load Latest Index button
+        if st.button("📥 Load Latest Index", use_container_width=True):
+            index_dir, corpus_id = load_latest_index()
+            if index_dir:
+                with st.spinner(f"Loading indexes from {corpus_id}..."):
+                    try:
+                        bm25, vectors, texts, meta = load_indexes(index_dir)
+                        if bm25 and vectors is not None and texts:
+                            state.docs = texts
+                            state.bm25_index = bm25
+                            state.vector_store = vectors
+                            state.corpus_id = corpus_id
+                            
+                            # Create retriever
+                            from sentence_transformers import SentenceTransformer
+                            embed_model = SentenceTransformer(meta.embed_model_name)
+                            retriever = EnsembleRetriever(
+                                bm25_index=bm25,
+                                vector_store=vectors,
+                                model=embed_model,
+                                text_chunks=texts
+                            )
+                            state.retriever = retriever
+                            state.embed_model = embed_model
+                            state.index_built_at = meta.built_at
+                            
+                            st.success(f"✓ Loaded {len(texts)} docs from {corpus_id}")
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"Failed to load indexes: {e}")
+            else:
+                st.info("No indexes found in data/indexes/")
+        
         # Index health card
         st.markdown("---")
         st.markdown("**Index Status**")
@@ -224,6 +380,33 @@ def main():
                 # Preview first doc
                 st.markdown("**First Document Preview:**")
                 st.text(state.docs[0][:300] + "...")
+    
+    # Stage 7: Cache Stats Sidebar
+    with st.sidebar:
+        st.markdown("---")
+        st.markdown("### 💾 Cache Statistics")
+        
+        # Initialize cache if needed
+        if not state.kv:
+            try:
+                state.kv = init_cache()
+            except Exception as e:
+                st.error(f"Cache init failed: {e}")
+        
+        if state.kv:
+            try:
+                cache_stats = get_cache_stats(state.kv)
+                
+                for table, stats in cache_stats.items():
+                    with st.expander(f"📊 {table.title()}", expanded=False):
+                        st.metric("Entries", stats["count"])
+                        st.metric("Size", f"{stats['size_kb']:.1f} KB")
+                
+                # Corpus ID display
+                if state.corpus_id != "empty":
+                    st.info(f"🔖 Corpus: `{state.corpus_id[:12]}...`")
+            except Exception as e:
+                st.error(f"Cache stats error: {e}")
 
 
 if __name__ == "__main__":

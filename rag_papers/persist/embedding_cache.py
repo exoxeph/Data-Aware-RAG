@@ -53,6 +53,16 @@ class CachingEncoder:
         self.hits = 0
         self.misses = 0
     
+    @property
+    def hit_count(self) -> int:
+        """Alias for hits (backwards compatibility)."""
+        return self.hits
+    
+    @property
+    def miss_count(self) -> int:
+        """Alias for misses (backwards compatibility)."""
+        return self.misses
+    
     def _cache_key(self, text: str) -> str:
         """Generate cache key for text."""
         # Include model name and normalize flag in key

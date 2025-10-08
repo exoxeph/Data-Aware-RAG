@@ -1,10 +1,11 @@
 """LLM integration and answer generation for RAG pipeline."""
 from __future__ import annotations
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any, Union, Iterator
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 import re
 import logging
+import time
 from pathlib import Path
 
 try:
@@ -59,6 +60,28 @@ class BaseGenerator(ABC):
     def is_available(self) -> bool:
         """Check if the generator is available and ready to use."""
         pass
+    
+    def stream(self, prompt: str, config: Optional[GenerationConfig] = None) -> Iterator[str]:
+        """
+        Stream tokens/chunks as they are generated.
+        
+        Default implementation: generate full response and split into words.
+        Override this for true streaming with LLM APIs.
+        
+        Args:
+            prompt: Input prompt
+            config: Generation configuration
+        
+        Yields:
+            Token strings
+        """
+        # Default: generate full response and simulate streaming
+        response = self.generate(prompt, config)
+        words = response.text.split()
+        
+        for word in words:
+            yield word + " "
+            time.sleep(0.01)  # Simulate streaming delay
 
 
 class MockGenerator(BaseGenerator):
@@ -90,6 +113,34 @@ class MockGenerator(BaseGenerator):
             prompt_length=len(prompt),
             response_length=len(response_text)
         )
+    
+    def stream(self, prompt: str, config: Optional[GenerationConfig] = None) -> Iterator[str]:
+        """
+        Stream mock response word-by-word to simulate real LLM streaming.
+        
+        Args:
+            prompt: Input prompt
+            config: Generation configuration (unused for mock)
+        
+        Yields:
+            Words with trailing spaces
+        """
+        prompt_lower = prompt.lower()
+        
+        # Find best matching response (same logic as generate)
+        response_text = self.mock_responses["default"]
+        for keyword, response in self.mock_responses.items():
+            if keyword != "default" and keyword in prompt_lower:
+                response_text = response
+                break
+        
+        # Split into words and yield with delay
+        words = response_text.split()
+        for i, word in enumerate(words):
+            # Add space after each word except the last
+            token = word if i == len(words) - 1 else word + " "
+            yield token
+            time.sleep(0.005)  # Fast streaming for testing
     
     def is_available(self) -> bool:
         """Mock generator is always available."""

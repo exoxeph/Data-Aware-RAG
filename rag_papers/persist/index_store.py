@@ -10,9 +10,11 @@ import pickle
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Any
+from typing import Optional, Any, Union
 
 import numpy as np
+
+from .paths import CorpusPaths
 
 
 @dataclass
@@ -57,7 +59,7 @@ def _compute_sha256(path: Path) -> str:
 
 
 def save_indexes(
-    idx_dir: Path,
+    idx_dir: Union[Path, CorpusPaths],
     bm25: Any,
     vector_store: Any,
     texts: list[str],
@@ -67,7 +69,7 @@ def save_indexes(
     Save BM25 index, vector store, and texts to disk with metadata.
     
     Args:
-        idx_dir: Directory to save indexes
+        idx_dir: Directory to save indexes (Path or CorpusPaths with .idx_dir)
         bm25: BM25 index object (will be pickled)
         vector_store: Vector store object with .vectors attribute
         texts: List of document texts
@@ -82,6 +84,10 @@ def save_indexes(
         - texts.json: JSON list of texts
         - meta.json: Metadata with checksums
     """
+    # Support both Path and CorpusPaths
+    if hasattr(idx_dir, 'idx_dir'):
+        idx_dir = idx_dir.idx_dir
+    
     idx_dir.mkdir(parents=True, exist_ok=True)
     
     bm25_path = idx_dir / "bm25.pkl"
@@ -132,14 +138,14 @@ def save_indexes(
 
 
 def load_indexes(
-    idx_dir: Path,
+    idx_dir: Union[Path, CorpusPaths],
     verify_checksums: bool = True,
 ) -> tuple[Optional[Any], Optional[np.ndarray], Optional[list[str]], Optional[IndexMeta]]:
     """
     Load BM25 index, vectors, texts, and metadata from disk.
     
     Args:
-        idx_dir: Directory containing saved indexes
+        idx_dir: Directory containing saved indexes (Path or CorpusPaths with .idx_dir)
         verify_checksums: Whether to verify SHA256 checksums
     
     Returns:
@@ -148,6 +154,10 @@ def load_indexes(
     Raises:
         ValueError: If checksums don't match (when verify_checksums=True)
     """
+    # Support both Path and CorpusPaths
+    if hasattr(idx_dir, 'idx_dir'):
+        idx_dir = idx_dir.idx_dir
+    
     bm25_path = idx_dir / "bm25.pkl"
     vectors_path = idx_dir / "vectors.npz"
     texts_path = idx_dir / "texts.json"
