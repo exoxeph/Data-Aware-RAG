@@ -1,0 +1,1 @@
+"""Integration test for PDF ingestion to table pipeline."""

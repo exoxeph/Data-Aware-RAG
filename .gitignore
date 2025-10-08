@@ -1,0 +1,316 @@
+# =============================================================================
+# .gitignore for Data-Aware RAG Pipeline
+# Python project with Poetry, FastAPI, Streamlit, and LLM integrations
+# =============================================================================
+
+# --- Python / Poetry ---
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Poetry
+# Note: poetry.lock and pyproject.toml are tracked
+*.lock.bak
+
+# --- Testing and Quality Tools ---
+# Pytest cache
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.cover
+*.py,cover
+.hypothesis/
+
+# Ruff cache
+.ruff_cache/
+
+# mypy cache
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Unit test / coverage reports
+nosetests.xml
+coverage.xml
+*.coveragerc
+
+# --- IDE and Editor Settings ---
+# VSCode
+.vscode/
+*.code-workspace
+
+# PyCharm / IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+.idea_modules/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# --- Operating System Files ---
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+.Trash-*
+
+# --- Environment and Secrets ---
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.development
+.env.test
+.env.production
+
+# API keys and secrets
+secrets.json
+secrets.yaml
+*.secret
+*.key
+*.pem
+
+# --- Logs and Temporary Files ---
+# Log files
+*.log
+logs/
+*.log.*
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+*.orig
+*.cache
+
+# --- Streamlit ---
+# Streamlit cache and config
+.streamlit/
+.streamlit/secrets.toml
+
+# --- FastAPI ---
+# FastAPI cache
+.fastapi_cache/
+
+# --- Project-Specific: Data and Artifacts ---
+# Raw data and PDFs (keep example files if needed)
+data/
+!data/.gitkeep
+!data/README.md
+
+# Raw PDFs
+data/raw_pdfs/*
+!data/raw_pdfs/.gitkeep
+
+# Processed data
+data/parquet/*
+!data/parquet/.gitkeep
+
+# Marker outputs
+data/marker/*
+!data/marker/.gitkeep
+
+# Figures and visualizations (optional: keep some examples)
+data/figures/*
+!data/figures/.gitkeep
+
+# Output directories
+outputs/
+!outputs/.gitkeep
+
+# Artifacts directory
+artifacts/
+checkpoints/
+*.ckpt
+*.checkpoint
+
+# --- Project-Specific: Models and Embeddings ---
+# Model weights and checkpoints
+models/
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.h5
+*.pkl
+*.pickle
+
+# HuggingFace cache
+.cache/
+huggingface/
+transformers_cache/
+
+# Embedding caches
+embeddings/
+*.npy
+*.npz
+vector_store/
+*.faiss
+*.index
+
+# BM25 indices
+bm25_index/
+*.bm25
+
+# --- Project-Specific: Notebooks and Experiments ---
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# Jupyter notebook outputs (keep example notebooks clean)
+notebooks/*.html
+notebooks/*.pdf
+notebooks/outputs/
+
+# Experiment tracking
+mlruns/
+.mlflow/
+wandb/
+.neptune/
+
+# --- Documentation ---
+# Sphinx documentation
+docs/_build/
+docs/.doctrees/
+
+# mkdocs
+site/
+
+# --- Database Files ---
+# SQLite databases
+*.db
+*.sqlite
+*.sqlite3
+
+# --- Compressed Archives ---
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
+# --- Keep These Files Tracked ---
+# Python source code (already tracked by default)
+# rag_papers/**/*.py
+
+# Configuration files (tracked)
+# pyproject.toml
+# poetry.lock
+
+# Example files (tracked)
+!examples/
+!examples/**/*.py
+!examples/**/*.ipynb
+!examples/**/*.md
+
+# Documentation (tracked)
+!README.md
+!CHANGELOG.md
+!LICENSE
+!CONTRIBUTING.md
+
+# Test fixtures (tracked)
+!tests/data/fixtures/
+!tests/data/fixtures/**/*
+
+# Example data (small samples for testing)
+!data/examples/
+!data/examples/**/*.pdf
+
+# Configuration templates
+!.env.example
+!.env.template
+!config.example.yaml
+
+# GitHub Actions (tracked)
+!.github/
+!.github/**/*
+
+# Docker files (tracked)
+!Dockerfile
+!docker-compose.yml
+!.dockerignore
+
+# --- Miscellaneous ---
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Redis
+dump.rdb
+
+# Node modules (if using any JS tools)
+node_modules/
+npm-debug.log*
+
+# Backup files from editors
+*.bak
+*.gho
+*.ori
+*.orig
+*.tmp
+
+# Lock files from other package managers (if mixing)
+package-lock.json
+yarn.lock
+
+# End of .gitignore

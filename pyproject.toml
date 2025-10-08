@@ -1,0 +1,68 @@
+[tool.poetry]
+name = "rag-papers"
+version = "0.1.0"
+description = "Data-Aware RAG system for PDF research papers"
+authors = ["Your Name <imtiazmashrafee@gmail.com>"]
+readme = "README.md"
+packages = [{ include = "rag_papers" }]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.13"
+
+# --- core ---
+pydantic = "^2.11.10"
+duckdb = "1.4.0"
+pandas = "^2.3.3"
+pyyaml = "^6.0.3"
+pdfplumber = "^0.11.7"
+pydantic-settings = "^2.4.0"
+python-dotenv = "^1.0.1"
+rank-bm25 = "^0.2.2"
+marker-pdf = "0.2.17"   
+
+# --- api / ui ---
+fastapi = "^0.118.0"
+uvicorn = "^0.37.0"
+streamlit = "^1.50.0"
+
+# --- embeddings / vector db ---
+chromadb = "1.1.1"               # if Poetry install fails, pip-install inside venv
+safetensors = "0.4.5"
+huggingface-hub = "0.24.6"
+accelerate = "0.33.0"
+numpy = "1.26.4"
+transformers = "^4.45.0"
+tokenizers = "0.20.3"
+sentence-transformers = "2.7.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.2"
+pytest-cov = "^5.0.0"
+hypothesis = "^6.112.0"
+freezegun = "^1.5.1"
+pytest-mock = "^3.14.0"
+ruff = "^0.6.9"
+mypy = "^1.11.2"
+pre-commit = "^3.8.0"
+
+# ---------- scripts ----------
+[tool.poetry.scripts]
+dev-api = "rag_papers.api.main:run"
+
+# ---------- tooling config ----------
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-q --cov=rag_papers --cov-report=term-missing"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "UP"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+
+[build-system]
+requires = ["poetry-core>=1.9.0"]
+build-backend = "poetry.core.masonry.api"

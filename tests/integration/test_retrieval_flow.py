@@ -1,0 +1,1 @@
+"""Integration test for end-to-end retrieval workflow."""
