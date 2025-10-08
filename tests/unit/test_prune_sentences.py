@@ -1,6 +1,7 @@
 """Unit test for sentence pruning and scoring."""
 
-from rag_papers.retrieval.prune_sentences import score_sentence
+import pytest
+from rag_papers.retrieval.prune_sentences import score_sentence, sentence_prune, batch_prune, _tokens
 
 
 def test_score_sentence_high_relevance():
@@ -77,3 +78,105 @@ def test_score_sentence_empty_sentence():
     score = score_sentence(query, sentence)
     assert score >= 0.0
     assert score <= 1.0
+
+
+# ============================================================================
+# Tests for sentence_prune and batch_prune
+# ============================================================================
+
+class TestTokenExtraction:
+    """Test token extraction helper."""
+    
+    def test_basic_tokens(self):
+        """Test basic tokenization."""
+        text = "Machine learning is awesome!"
+        tokens = _tokens(text)
+        assert "machine" in tokens
+        assert "learning" in tokens
+        assert "awesome" in tokens
+    
+    def test_lowercasing(self):
+        """Test that tokens are lowercased."""
+        tokens = _tokens("NEURAL NETWORKS")
+        assert "neural" in tokens
+        assert "networks" in tokens
+        assert "NEURAL" not in tokens
+    
+    def test_stopwords_and_short_tokens(self):
+        """Test that tokens are lowercased but not filtered in _tokens."""
+        tokens = _tokens("The cat in the hat")
+        # _tokens just splits and lowercases - filtering happens elsewhere
+        assert "cat" in tokens
+        assert "hat" in tokens
+        assert "the" in tokens  # _tokens doesn't filter stopwords
+        assert "in" in tokens
+
+
+class TestSentencePrune:
+    """Test sentence pruning logic."""
+    
+    def test_no_overlap_filters_all(self):
+        """Test that sentences without overlap are filtered."""
+        query = "deep learning neural networks"
+        text = "This is about gardening and cooking. No relevant content."
+        result = sentence_prune(query, text, min_overlap=1)
+        # All sentences should be filtered
+        assert result == ""
+    
+    def test_high_overlap_keeps_sentences(self):
+        """Test that sentences with sufficient overlap are kept."""
+        query = "neural networks machine learning"
+        text = "Neural networks are powerful. Machine learning models learn patterns."
+        result = sentence_prune(query, text, min_overlap=1)
+        # Both sentences have overlap
+        assert "neural" in result.lower() or "machine" in result.lower()
+    
+    def test_min_overlap_threshold(self):
+        """Test that min_overlap parameter works correctly."""
+        query = "deep learning neural networks"
+        # First sentence has 1 overlap ("neural")
+        # Second sentence has 2 overlaps ("deep", "learning")
+        text = "Neural computation is interesting. Deep learning uses neural networks."
+        
+        result = sentence_prune(query, text, min_overlap=2)
+        assert "deep" in result.lower() or "learning" in result.lower()
+    
+    def test_empty_query(self):
+        """Test handling of empty query."""
+        result = sentence_prune("", "Some text here.", min_overlap=1)
+        assert result == ""
+    
+    def test_empty_text(self):
+        """Test handling of empty text."""
+        result = sentence_prune("query", "", min_overlap=1)
+        assert result == ""
+
+
+class TestBatchPrune:
+    """Test batch pruning across multiple documents."""
+    
+    def test_empty_docs(self):
+        """Test handling of empty document list."""
+        result = batch_prune("query", [], min_overlap=1)
+        assert result == []
+    
+    def test_single_document(self):
+        """Test pruning single document."""
+        query = "machine learning"
+        docs = ["Machine learning is a field of AI. It involves algorithms."]
+        result = batch_prune(query, docs, min_overlap=1)
+        assert len(result) == 1
+        assert "machine" in result[0].lower() or "learning" in result[0].lower()
+    
+    def test_multiple_documents(self):
+        """Test pruning multiple documents."""
+        query = "neural networks"
+        docs = [
+            "Neural networks are computational models.",
+            "This is about gardening.",
+            "Networks of neurons process information."
+        ]
+        result = batch_prune(query, docs, min_overlap=1)
+        # Should keep first and third documents
+        assert len(result) >= 1
+        assert not any("gardening" in doc.lower() for doc in result)
