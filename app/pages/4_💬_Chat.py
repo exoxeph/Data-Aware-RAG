@@ -218,6 +218,34 @@ with st.sidebar:
         if embed_hits + embed_misses > 0:
             hit_rate = embed_hits / (embed_hits + embed_misses) * 100
             st.metric("Embedding Hit Rate", f"{hit_rate:.1f}%")
+    
+    # Memory stats (Stage 10)
+    if hasattr(state, 'last_memory_info') and state.last_memory_info:
+        st.markdown("### 🧠 Last Query Memory")
+        
+        mem_info = state.last_memory_info
+        
+        # Memory status
+        if mem_info.get("enabled", False):
+            st.success("✅ Memory ON")
+        else:
+            st.warning("⚠️ Memory OFF")
+        
+        # Usage stats
+        used_count = mem_info.get("used_count", 0)
+        used_chars = mem_info.get("chars", 0)
+        written_count = mem_info.get("written_count", 0)
+        
+        if used_count > 0:
+            st.info(f"📥 Used: {used_count} notes ({used_chars} chars)")
+        
+        if written_count > 0:
+            st.info(f"📤 Wrote: {written_count} notes")
+        
+        # Show actual memory text (if available)
+        if mem_info.get("memory_text"):
+            with st.expander("View Memory Context"):
+                st.markdown(mem_info["memory_text"])
 
 # Main chat interface
 st.markdown("# 💬 RAG Chat")
@@ -419,6 +447,17 @@ if user_input:
                     sources = data.get("sources", [])
                     cache_info = data.get("cache", {})
                     latency = data.get("latency_ms", 0)
+                    memory_info = data.get("memory", {})
+                    
+                    # Store memory info in state
+                    if memory_info:
+                        state.last_memory_info = {
+                            "enabled": True,
+                            "used_count": memory_info.get("used_count", 0),
+                            "chars": memory_info.get("chars", 0),
+                            "written_count": memory_info.get("written_count", 0),
+                            "memory_text": None  # Would need to fetch separately
+                        }
                     
                     # Add assistant message with metadata
                     add_chat_message(

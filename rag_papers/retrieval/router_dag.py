@@ -83,6 +83,15 @@ class Stage4Config:
     enable_streaming: bool = True
     max_history_turns: int = 5
     
+    # Stage 10: Memory system
+    enable_memory: bool = True
+    memory_max_notes: int = 32
+    memory_top_k: int = 5
+    memory_write_policy: str = "conservative"  # "never", "conservative", "aggressive"
+    memory_summarize_every: int = 4
+    memory_summary_target_chars: int = 800
+    memory_inject_max_chars: int = 1200
+    
     # Convenience property for top_k (used in many places)
     @property
     def top_k(self) -> int:
@@ -523,13 +532,15 @@ def run_chat_plan(
     retriever: EnsembleRetriever,
     generator: BaseGenerator,
     cfg: Stage4Config,
-    use_cache: bool = True
+    use_cache: bool = True,
+    session_id: Optional[str] = None,
+    memory_integration: Optional[Any] = None
 ) -> Tuple[str, Context]:
     """
-    Run RAG plan with conversation history context.
+    Run RAG plan with conversation history context and optional memory.
     
     Merges recent chat history into query context for history-aware retrieval
-    and generation.
+    and generation. Optionally injects long-term memories.
     
     Args:
         query: Current user query
@@ -538,6 +549,8 @@ def run_chat_plan(
         generator: LLM generator
         cfg: Pipeline configuration
         use_cache: Whether to use caching
+        session_id: Session identifier for memory scoping
+        memory_integration: Optional MemoryIntegration instance
     
     Returns:
         Tuple of (answer, context) where context includes sources and metadata
@@ -558,6 +571,29 @@ def run_chat_plan(
     # Build history prefix from recent messages (last 5 turns)
     recent_history = history[-5:] if len(history) > 5 else history
     
+    memory_context = ""
+    memory_metadata = {}
+    
+    # === STAGE 10: Memory injection (read path) ===
+    if cfg.enable_memory and memory_integration and session_id:
+        try:
+            from rag_papers.memory.schemas import MemoryMetadata
+            
+            mem_ctx, mem_meta = memory_integration.inject_memories(
+                query=query,
+                recent_history=recent_history,
+                scope="session",
+                scope_key=session_id,
+                cfg=cfg
+            )
+            
+            memory_context = mem_ctx
+            memory_metadata = mem_meta.model_dump() if isinstance(mem_meta, MemoryMetadata) else mem_meta
+            
+        except Exception as e:
+            # Memory is optional - continue without it
+            print(f"Warning: Memory injection failed: {e}")
+    
     if recent_history:
         history_lines = [
             f"{msg['role'].capitalize()}: {msg['content']}"
@@ -565,10 +601,17 @@ def run_chat_plan(
         ]
         history_prefix = "\n".join(history_lines) + "\n"
         
-        # Augment query with history context
-        contextualized_query = f"{history_prefix}User: {query}\nAssistant:"
+        # Augment query with history context AND memory
+        if memory_context:
+            contextualized_query = f"{memory_context}\n{history_prefix}User: {query}\nAssistant:"
+        else:
+            contextualized_query = f"{history_prefix}User: {query}\nAssistant:"
     else:
-        contextualized_query = query
+        # No history, but maybe memory
+        if memory_context:
+            contextualized_query = f"{memory_context}\nUser: {query}\nAssistant:"
+        else:
+            contextualized_query = query
     
     # Run standard plan with history-enriched query
     answer, ctx = run_plan(
@@ -583,6 +626,35 @@ def run_chat_plan(
     ctx["meta"]["original_query"] = query
     ctx["meta"]["history_turns"] = len(history)
     
+    # Add memory metadata to context
+    if memory_metadata:
+        ctx["meta"]["memory"] = memory_metadata
+    
+    # === STAGE 10: Memory write path ===
+    if cfg.enable_memory and memory_integration and session_id:
+        try:
+            # Write memories after verification if policy allows
+            written_ids = memory_integration.write_memories(
+                turn={"query": query, "answer": answer, "context": ctx},
+                verify_result=ctx.get("verify", {}),
+                history=history,
+                scope="session",
+                scope_key=session_id,
+                generator=generator,
+                cfg=cfg
+            )
+            
+            if written_ids:
+                # Update memory metadata with written notes
+                if "memory" not in ctx["meta"]:
+                    ctx["meta"]["memory"] = {}
+                ctx["meta"]["memory"]["written"] = written_ids
+                ctx["meta"]["memory"]["written_count"] = len(written_ids)
+                
+        except Exception as e:
+            # Memory is optional - continue without it
+            print(f"Warning: Memory write failed: {e}")
+    
     return answer, ctx
 
 
@@ -592,18 +664,21 @@ async def run_chat_plan_stream(
     retriever: EnsembleRetriever,
     generator: BaseGenerator,
     cfg: Stage4Config,
-    use_cache: bool = True
+    use_cache: bool = True,
+    session_id: Optional[str] = None,
+    memory_integration: Optional[Any] = None
 ) -> AsyncIterator[Dict[str, Any]]:
     """
     Stream chat plan execution as SSE events.
     
     Yields events:
     - type: meta -> {"run_id", "corpus_id", "retrieved", "ctx_chars"}
+    - type: memory -> {"used_ids", "used_count", "chars"} (Stage 10)
     - type: token -> {"t": " word "}
     - type: sources -> {"sources": [{"doc", "score"}]}
     - type: verify -> {"score", "accepted", "issues"}
     - type: cached -> {"answer"} (if cache hit)
-    - type: done -> implicit (caller handles)
+    - type: done -> {"written": [...]} (memory notes written)
     
     Args:
         query: User's current question
@@ -612,6 +687,8 @@ async def run_chat_plan_stream(
         generator: LLM generator with stream() method
         cfg: Stage4 configuration
         use_cache: Whether to check answer cache
+        session_id: Session identifier for memory scoping
+        memory_integration: Optional MemoryIntegration instance
     
     Yields:
         Dict events for SSE encoding
@@ -624,6 +701,43 @@ async def run_chat_plan_stream(
     run_id = str(uuid.uuid4())[:8]
     start_time = time.time()
     
+    # === STAGE 10: Memory injection (read path) ===
+    memory_context = ""
+    memory_metadata = {}
+    used_memories = []
+    
+    if cfg.enable_memory and memory_integration and session_id:
+        try:
+            from rag_papers.memory.schemas import MemoryMetadata
+            
+            # Recall relevant memories
+            recent_history = history[-5:] if len(history) > 5 else history
+            mem_ctx, mem_meta = memory_integration.inject_memories(
+                query=query,
+                recent_history=recent_history,
+                scope="session",
+                scope_key=session_id,
+                cfg=cfg
+            )
+            
+            memory_context = mem_ctx
+            memory_metadata = mem_meta.model_dump() if isinstance(mem_meta, MemoryMetadata) else mem_meta
+            used_memories = memory_metadata.get("used_ids", [])
+            
+            # Yield memory event
+            yield {
+                "type": "memory",
+                "data": {
+                    "used_ids": used_memories,
+                    "used_count": len(used_memories),
+                    "chars": len(memory_context)
+                }
+            }
+            
+        except Exception as e:
+            # Memory is optional - continue without it
+            print(f"Warning: Memory injection failed: {e}")
+    
     # Build history context (last 5 turns)
     history_prefix = ""
     if history:
@@ -634,8 +748,11 @@ async def run_chat_plan_stream(
             history_prefix += f"{role.capitalize()}: {content}\n"
         history_prefix += "\n"
     
-    # Contextualize query
-    contextualized_query = history_prefix + f"User: {query}"
+    # Contextualize query with memory + history
+    if memory_context:
+        contextualized_query = f"{memory_context}\n{history_prefix}User: {query}"
+    else:
+        contextualized_query = history_prefix + f"User: {query}"
     
     # Check answer cache first
     if use_cache:
@@ -709,17 +826,20 @@ Answer the question based on the context above. Be concise and accurate."""
         }
     
     # 4. Verify answer (optional)
+    verify_result = {}
     try:
         verifier = ResponseVerifier()
         verification = verifier.verify(full_answer, results)
         
+        verify_result = {
+            "score": verification.score,
+            "accepted": verification.accepted,
+            "issues": verification.issues
+        }
+        
         yield {
             "type": "verify",
-            "data": {
-                "score": verification.score,
-                "accepted": verification.accepted,
-                "issues": verification.issues
-            }
+            "data": verify_result
         }
     except Exception:
         # Verifier optional - skip if fails
@@ -736,4 +856,32 @@ Answer the question based on the context above. Be concise and accurate."""
             }
         )
         set_answer(cache_key, answer_value)
+    
+    # === STAGE 10: Memory write path ===
+    written_ids = []
+    if cfg.enable_memory and memory_integration and session_id:
+        try:
+            # Write memories after verification if policy allows
+            written_ids = memory_integration.write_memories(
+                turn={"query": query, "answer": full_answer},
+                verify_result=verify_result,
+                history=history,
+                scope="session",
+                scope_key=session_id,
+                generator=generator,
+                cfg=cfg
+            )
+            
+        except Exception as e:
+            # Memory is optional - continue without it
+            print(f"Warning: Memory write failed: {e}")
+    
+    # 6. Yield done event with memory writes
+    yield {
+        "type": "done",
+        "data": {
+            "written": written_ids,
+            "written_count": len(written_ids)
+        }
+    }
 

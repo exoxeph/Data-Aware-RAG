@@ -17,27 +17,17 @@ class AnswerKey:
     """Key for answer cache."""
     
     query: str
-    intent: str
     corpus_id: str
-    model: str                  # Generator model name
-    cfg: dict                   # Subset of Stage4Config
+    model_id: str = "default"          # Generator model identifier
+    memory_version: str = "none"       # Stage 10: Memory version hash for cache invalidation
     
     def to_hash(self) -> str:
         """Convert to cache key hash."""
-        # Round floats in config
-        cfg_normalized = {}
-        for k, v in self.cfg.items():
-            if isinstance(v, float):
-                cfg_normalized[k] = round(v, 4)
-            else:
-                cfg_normalized[k] = v
-        
         data = {
             "query": self.query,
-            "intent": self.intent,
             "corpus_id": self.corpus_id,
-            "model": self.model,
-            "cfg": cfg_normalized,
+            "model_id": self.model_id,
+            "memory_version": self.memory_version,
         }
         return stable_hash(data)
 

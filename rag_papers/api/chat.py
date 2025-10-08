@@ -84,6 +84,10 @@ class ChatResponse(BaseModel):
     cache: CacheInfo = Field(default_factory=CacheInfo, description="Cache statistics")
     latency_ms: float = Field(..., description="Total response time in milliseconds")
     session_id: Optional[str] = Field(None, description="Session identifier")
+    memory: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Memory usage: {used_ids, used_count, written, chars}"
+    )
 
 
 @router.post("/chat", response_model=ChatResponse)
